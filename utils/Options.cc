@@ -17,9 +17,9 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 **************************************************************************************************/
 
-#include "mtl/Sort.h"
-#include "utils/Options.h"
-#include "utils/ParseUtils.h"
+#include "glucose/mtl/Sort.h"
+#include "glucose/utils/Options.h"
+#include "glucose/utils/ParseUtils.h"
 
 using namespace Glucose;
 
@@ -42,11 +42,13 @@ void Glucose::parseOptions(int& argc, char** argv, bool strict)
                 // fprintf(stderr, "checking %d: %s against flag <%s> (%s)\n", i, argv[i], Option::getOptionList()[k]->name, parsed_ok ? "ok" : "skip");
             }
 
-            if (!parsed_ok)
+            if (!parsed_ok) {
                 if (strict && match(argv[i], "-"))
                     fprintf(stderr, "ERROR! Unknown flag \"%s\". Use '--%shelp' for help.\n", argv[i], Option::getHelpPrefixString()), exit(1);
-                else
+                else {
                     argv[j++] = argv[i];
+                }
+            }
         }
     }
 

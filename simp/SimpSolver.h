@@ -21,8 +21,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #ifndef Glucose_SimpSolver_h
 #define Glucose_SimpSolver_h
 
-#include "mtl/Queue.h"
-#include "core/Solver.h"
+#include "glucose/mtl/Queue.h"
+#include "glucose/core/Solver.h"
 
 
 namespace Glucose {

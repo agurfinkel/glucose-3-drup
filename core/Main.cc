@@ -2,7 +2,7 @@
  Glucose -- Copyright (c) 2009, Gilles Audemard, Laurent Simon
 				CRIL - Univ. Artois, France
 				LRI  - Univ. Paris Sud, France
- 
+
 Glucose sources are based on MiniSat (see below MiniSat copyrights). Permissions and copyrights of
 Glucose are exactly the same as Minisat on which it is based on. (see below).
 
@@ -32,11 +32,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include <signal.h>
 #include <zlib.h>
 
-#include "utils/System.h"
-#include "utils/ParseUtils.h"
-#include "utils/Options.h"
-#include "core/Dimacs.h"
-#include "core/Solver.h"
+#include "glucose/utils/System.h"
+#include "glucose/utils/ParseUtils.h"
+#include "glucose/utils/Options.h"
+#include "glucose/core/Dimacs.h"
+#include "glucose/core/Solver.h"
 
 using namespace Glucose;
 
@@ -61,7 +61,7 @@ void printStats(Solver& solver)
     printf("c propagations          : %-12"PRIu64"   (%.0f /sec)\n", solver.propagations, solver.propagations/cpu_time);
     printf("c conflict literals     : %-12"PRIu64"   (%4.2f %% deleted)\n", solver.tot_literals, (solver.max_literals - solver.tot_literals)*100 / (double)solver.max_literals);
     printf("c nb reduced Clauses    : %lld\n",solver.nbReducedClauses);
-    
+
     if (mem_used != 0) printf("Memory used           : %.2f MB\n", mem_used);
     printf("c CPU time              : %g s\n", cpu_time);
 }
@@ -93,7 +93,7 @@ int main(int argc, char** argv)
     try {
         setUsageHelp("c USAGE: %s [options] <input-file> <result-output-file>\n\n  where input may be either in plain or gzipped DIMACS.\n");
         // printf("This is MiniSat 2.0 beta\n");
-        
+
 #if defined(__linux__)
         fpu_control_t oldcw, newcw;
         _FPU_GETCW(oldcw); newcw = (oldcw & ~_FPU_EXTENDED) | _FPU_DOUBLE; _FPU_SETCW(newcw);
@@ -106,7 +106,7 @@ int main(int argc, char** argv)
         IntOption    vv  ("MAIN", "vv",   "Verbosity every vv conflicts", 10000, IntRange(1,INT32_MAX));
         IntOption    cpu_lim("MAIN", "cpu-lim","Limit on CPU time allowed in seconds.\n", INT32_MAX, IntRange(0, INT32_MAX));
         IntOption    mem_lim("MAIN", "mem-lim","Limit on memory usage in megabytes.\n", INT32_MAX, IntRange(0, INT32_MAX));
-        
+
 
         parseOptions(argc, argv, true);
 
@@ -142,39 +142,39 @@ int main(int argc, char** argv)
                 if (setrlimit(RLIMIT_AS, &rl) == -1)
                     printf("c WARNING! Could not set resource limit: Virtual memory.\n");
             } }
-        
+
         if (argc == 1)
             printf("c Reading from standard input... Use '--help' for help.\n");
-        
+
         gzFile in = (argc == 1) ? gzdopen(0, "rb") : gzopen(argv[1], "rb");
         if (in == NULL)
             printf("c ERROR! Could not open file: %s\n", argc == 1 ? "<stdin>" : argv[1]), exit(1);
-        
+
         if (S.verbosity > 0){
             printf("c ========================================[ Problem Statistics ]===========================================\n");
             printf("c |                                                                                                       |\n"); }
-        
+
         parse_DIMACS(in, S);
         gzclose(in);
-        
 
-	
+
+
         FILE* res = (argc >= 3) ? fopen(argv[argc-1], "wb") : NULL;
 
         if (S.verbosity > 0){
             printf("c |  Number of variables:  %12d                                                                   |\n", S.nVars());
             printf("c |  Number of clauses:    %12d                                                                   |\n", S.nClauses()); }
-        
+
         double parsed_time = cpuTime();
         if (S.verbosity > 0){
             printf("c |  Parse time:           %12.2f s                                                                 |\n", parsed_time - initial_time);
             printf("c |                                                                                                       |\n"); }
- 
+
         // Change to signal-handlers that will only notify the solver and allow it to terminate
         // voluntarily:
         //signal(SIGINT, SIGINT_interrupt);
         //signal(SIGXCPU,SIGINT_interrupt);
-       
+
         if (!S.simplify()){
             if (S.certifiedOutput != NULL) fprintf(S.certifiedOutput, "0\n"), fclose(S.certifiedOutput);
             if (res != NULL) fprintf(res, "UNSAT\n"), fclose(res);
@@ -194,7 +194,7 @@ int main(int argc, char** argv)
             printf("\n"); }
 
 	//-------------- Result is put in a external file
-        if (res != NULL){  
+        if (res != NULL){
 	  if (ret == l_True){
 	    fprintf(res, "SAT\n");
 	    for (int i = 0; i < S.nVars(); i++)
@@ -206,9 +206,9 @@ int main(int argc, char** argv)
 	  else
 	    fprintf(res, "INDET\n");
 	  fclose(res);
-	
+
 	//-------------- Want certified output
-        } else { 
+        } else {
 	  printf(ret == l_True ? "s SATISFIABLE\n" : ret == l_False ? "s UNSATISFIABLE\n" : "s INDETERMINATE\n");
 	  if(S.showModel && ret==l_True) {
 	    printf("v ");
@@ -218,8 +218,8 @@ int main(int argc, char** argv)
 	    printf(" 0\n");
 	  }
 	}
-    
-    
+
+
 #ifdef NDEBUG
         exit(ret == l_True ? 10 : ret == l_False ? 20 : 0);     // (faster than "return", which will invoke the destructor for 'Solver')
 #else

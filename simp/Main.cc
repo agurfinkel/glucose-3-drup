@@ -33,11 +33,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include <zlib.h>
 #include <sys/resource.h>
 
-#include "utils/System.h"
-#include "utils/ParseUtils.h"
-#include "utils/Options.h"
-#include "core/Dimacs.h"
-#include "simp/SimpSolver.h"
+#include "glucose/utils/System.h"
+#include "glucose/utils/ParseUtils.h"
+#include "glucose/utils/Options.h"
+#include "glucose/core/Dimacs.h"
+#include "glucose/simp/SimpSolver.h"
 
 using namespace Glucose;
 

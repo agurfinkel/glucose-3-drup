@@ -18,9 +18,9 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 **************************************************************************************************/
 
-#include "mtl/Sort.h"
-#include "simp/SimpSolver.h"
-#include "utils/System.h"
+#include "glucose/mtl/Sort.h"
+#include "glucose/simp/SimpSolver.h"
+#include "glucose/utils/System.h"
 
 using namespace Glucose;
 
@@ -278,11 +278,12 @@ bool SimpSolver::merge(const Clause& _ps, const Clause& _qs, Var v, int& size)
     for (int i = 0; i < qs.size(); i++){
         if (var(__qs[i]) != v){
             for (int j = 0; j < ps.size(); j++)
-                if (var(__ps[j]) == var(__qs[i]))
+                if (var(__ps[j]) == var(__qs[i])) {
                     if (__ps[j] == ~__qs[i])
                         return false;
                     else
                         goto next;
+                }
             size++;
         }
         next:;
@@ -506,7 +507,7 @@ bool SimpSolver::eliminateVar(Var v)
 
     for (int i = 0; i < pos.size(); i++)
         for (int j = 0; j < neg.size(); j++)
-            if (merge(ca[pos[i]], ca[neg[j]], v, clause_size) && 
+            if (merge(ca[pos[i]], ca[neg[j]], v, clause_size) &&
                 (++cnt > cls.size() + grow || (clause_lim != -1 && clause_size > clause_lim)))
                 return true;
 
@@ -558,7 +559,7 @@ bool SimpSolver::substitute(Var v, Lit x)
     eliminated[v] = true;
     setDecisionVar(v, false);
     const vec<CRef>& cls = occurs.lookup(v);
-    
+
     vec<Lit>& subst_clause = add_tmp;
     for (int i = 0; i < cls.size(); i++){
         Clause& c = ca[cls[i]];
@@ -569,12 +570,12 @@ bool SimpSolver::substitute(Var v, Lit x)
             subst_clause.push(var(p) == v ? x ^ sign(p) : p);
         }
 
- 
+
         if (!addClause_(subst_clause))
             return ok = false;
 
        removeClause(cls[i]);
- 
+
    }
 
     return true;
@@ -609,7 +610,7 @@ bool SimpSolver::eliminate(bool turn_off_elim)
     //
 
     int toPerform = clauses.size()<=4800000;
-    
+
     if(!toPerform) {
       printf("c Too many clauses... No preprocessing\n");
     }
@@ -618,7 +619,7 @@ bool SimpSolver::eliminate(bool turn_off_elim)
 
         gatherTouchedClauses();
         // printf("  ## (time = %6.2f s) BWD-SUB: queue = %d, trail = %d\n", cpuTime(), subsumption_queue.size(), trail.size() - bwdsub_assigns);
-        if ((subsumption_queue.size() > 0 || bwdsub_assigns < trail.size()) && 
+        if ((subsumption_queue.size() > 0 || bwdsub_assigns < trail.size()) &&
             !backwardSubsumptionCheck(true)){
             ok = false; goto cleanup; }
 
@@ -633,7 +634,7 @@ bool SimpSolver::eliminate(bool turn_off_elim)
         // printf("  ## (time = %6.2f s) ELIM: vars = %d\n", cpuTime(), elim_heap.size());
         for (int cnt = 0; !elim_heap.empty(); cnt++){
             Var elim = elim_heap.removeMin();
-            
+
             if (asynch_interrupt) break;
 
             if (isEliminated(elim) || value(elim) != l_Undef) continue;
@@ -683,7 +684,7 @@ bool SimpSolver::eliminate(bool turn_off_elim)
     }
 
     if (verbosity >= 1 && elimclauses.size() > 0)
-        printf("c |  Eliminated clauses:     %10.2f Mb                                                                |\n", 
+        printf("c |  Eliminated clauses:     %10.2f Mb                                                                |\n",
                double(elimclauses.size() * sizeof(uint32_t)) / (1024*1024));
 
     return ok;
@@ -732,14 +733,14 @@ void SimpSolver::garbageCollect()
 {
     // Initialize the next region to a size corresponding to the estimated utilization degree. This
     // is not precise but should avoid some unnecessary reallocations for the new region:
-    ClauseAllocator to(ca.size() - ca.wasted()); 
+    ClauseAllocator to(ca.size() - ca.wasted());
 
     cleanUpClauses();
     to.extra_clause_field = ca.extra_clause_field; // NOTE: this is important to keep (or lose) the extra fields.
     relocAll(to);
     Solver::relocAll(to);
     if (verbosity >= 2)
-        printf("|  Garbage collection:   %12d bytes => %12d bytes             |\n", 
+        printf("|  Garbage collection:   %12d bytes => %12d bytes             |\n",
                ca.size()*ClauseAllocator::Unit_Size, to.size()*ClauseAllocator::Unit_Size);
     to.moveTo(ca);
 }

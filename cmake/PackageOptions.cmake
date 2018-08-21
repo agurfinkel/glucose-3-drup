@@ -1,0 +1,3 @@
+set(GLUCOSE_LIBRARY glucose.LIB)
+set(GLUCOSE_INCLUDE_DIR "${Glucose_BINARY_DIR}/include")
+add_definitions(-D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS)

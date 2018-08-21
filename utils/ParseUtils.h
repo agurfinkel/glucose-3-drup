@@ -103,7 +103,7 @@ static double parseDouble(B& in) { // only in the form X.XXXXXe-XX
 	if (*in != 'e') printf("PARSE ERROR! Unexpected char: %c\n", *in),exit(3);
 	++in; // skip dot
 	exponent = parseInt(in); // read exponent
-	accu *= pow(10,exponent);
+	accu *= pow(10.0,exponent);
 	return neg ? -accu:accu;
 }
 
