@@ -37,6 +37,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "glucose/utils/Options.h"
 #include "glucose/core/Dimacs.h"
 #include "glucose/core/Solver.h"
+#include "glucose/core/TraceProofVisitor.h"
 
 using namespace Glucose;
 
@@ -107,6 +108,7 @@ int main(int argc, char** argv)
         IntOption    cpu_lim("MAIN", "cpu-lim","Limit on CPU time allowed in seconds.\n", INT32_MAX, IntRange(0, INT32_MAX));
         IntOption    mem_lim("MAIN", "mem-lim","Limit on memory usage in megabytes.\n", INT32_MAX, IntRange(0, INT32_MAX));
 
+        StringOption tcpf ("MAIN", "tcpf", "If given, write proof in trace-check format to this file");
 
         parseOptions(argc, argv, true);
 
@@ -183,6 +185,15 @@ int main(int argc, char** argv)
                 printf("Solved by unit propagation\n");
                 printStats(S);
                 printf("\n"); }
+            if (S.proofLogging ())
+              printf ("%s\n", S.validate () ? "VALID" : "INVALID");
+            if (S.proofLogging () && tcpf)
+              {
+                FILE *f = fopen ((const char*) tcpf, "w");
+                TraceProofVisitor v(S, f);
+                S.replay (v);
+                fclose (f);
+              }
             printf("s UNSATISFIABLE\n");
             exit(20);
         }
@@ -219,6 +230,27 @@ int main(int argc, char** argv)
 	  }
 	}
 
+         if (ret == l_False && S.proofLogging ()) printf ("%s\n", S.validate () ? "VALID" : "INVALID");
+        if (ret == l_False && S.proofLogging () && tcpf)
+        {
+          FILE *f = fopen ((const char*) tcpf, "w");
+          TraceProofVisitor v(S, f);
+          S.replay (v);
+          fclose (f);
+        }
+        if (res != NULL){
+            if (ret == l_True){
+                fprintf(res, "SAT\n");
+                for (int i = 0; i < S.nVars(); i++)
+                    if (S.model[i] != l_Undef)
+                        fprintf(res, "%s%s%d", (i==0)?"":" ", (S.model[i]==l_True)?"":"-", i+1);
+                fprintf(res, " 0\n");
+            }else if (ret == l_False)
+                fprintf(res, "UNSAT\n");
+            else
+                fprintf(res, "INDET\n");
+            fclose(res);
+        }
 
 #ifdef NDEBUG
         exit(ret == l_True ? 10 : ret == l_False ? 20 : 0);     // (faster than "return", which will invoke the destructor for 'Solver')

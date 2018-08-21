@@ -123,6 +123,45 @@ public:
 inline int   toInt  (lbool l) { return l.value; }
 inline lbool toLbool(int   v) { return lbool((uint8_t)v);  }
 
+class Range
+{
+  unsigned m_min  : 16;
+  unsigned m_max  : 16;
+
+ public:
+  enum { part_Undef = 0 };
+
+  Range () : m_min (part_Undef), m_max (part_Undef) {}
+  Range (unsigned p) : m_min (p), m_max (p) {}
+
+  bool undef () const { return m_min == part_Undef; }
+  void reset () { m_min = part_Undef; m_max = part_Undef; }
+  bool singleton () const { return m_min == m_max; }
+
+  void join (unsigned np)
+  {
+    if (np == 0) return;
+
+    if (undef ()) { m_min = np; m_max = np; }
+    else if (np > m_max)
+      m_max = np;
+    else if (np < m_min)
+      m_min = np;
+  }
+  void join(const Range& o)
+  {
+    if (o.undef ()) return;
+
+    join (o.min ());
+    join (o.max ());
+  }
+  unsigned min () const { return m_min; }
+  unsigned max () const { return m_max; }
+
+  bool operator==(const Range& r) {return m_min == r.m_min && m_max == r.m_max;}
+  bool operator!=(const Range& r) {return !operator==(r);}  
+};
+
 //=================================================================================================
 // Clause -- a simple class for representing a clause:
 
@@ -137,10 +176,12 @@ class Clause {
       unsigned reloced   : 1;
       unsigned lbd       : 26;
       unsigned canbedel  : 1;
-      unsigned size      : 32;
+      unsigned core      : 1;
+      unsigned size      : 31;
       unsigned szWithoutSelectors : 32;
 
     }                            header;
+    Range                                                 partition;
     union { Lit lit; float act; uint32_t abs; CRef rel; } data[0];
 
     friend class ClauseAllocator;
@@ -152,6 +193,7 @@ class Clause {
         header.learnt    = learnt;
         header.has_extra = use_extra;
         header.reloced   = 0;
+        header.core      = 0;
         header.size      = ps.size();
 	header.lbd = 0;
 	header.canbedel = 1;
@@ -183,9 +225,14 @@ public:
     void         mark        (uint32_t m)    { header.mark = m; }
     const Lit&   last        ()      const   { return data[header.size-1].lit; }
 
+    void         reloced     (uint32_t r)    { header.reloced = r; }
     bool         reloced     ()      const   { return header.reloced; }
     CRef         relocation  ()      const   { return data[0].rel; }
     void         relocate    (CRef c)        { header.reloced = 1; data[0].rel = c; }
+
+
+    bool         core        ()      const   { return header.core; }
+    void         core        (uint32_t c)    { header.core = c; }
 
     // NOTE: somewhat unsafe to change the clause in-place! Must manually call 'calcAbstraction' afterwards for
     //       subsumption operations to behave correctly.
@@ -206,6 +253,9 @@ public:
     void setSizeWithoutSelectors   (unsigned int n)              {header.szWithoutSelectors = n; }
     unsigned int        sizeWithoutSelectors   () const        { return header.szWithoutSelectors; }
 
+    Range&       part () 				 { return partition; }
+    const Range& part () const 		     { return partition; }
+    void         part (const Range &v)   { partition = v; }
 };
 
 
@@ -266,6 +316,8 @@ class ClauseAllocator : public RegionAllocator<uint32_t>
         // Copy extra data-fields: 
         // (This could be cleaned-up. Generalize Clause-constructor to be applicable here instead?)
         to[cr].mark(c.mark());
+        to[cr].core(c.core());
+        to[cr].part (c.part ());
         if (to[cr].learnt())        {
 	  to[cr].activity() = c.activity();
 	  to[cr].setLBD(c.lbd());

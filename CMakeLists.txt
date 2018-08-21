@@ -56,6 +56,10 @@ configure_file (core/Solver.h
   ${CMAKE_CURRENT_BINARY_DIR}/include/glucose/core/Solver.h COPYONLY)
 configure_file (core/SolverTypes.h
   ${CMAKE_CURRENT_BINARY_DIR}/include/glucose/core/SolverTypes.h COPYONLY)
+configure_file (core/ProofVisitor.h
+  ${CMAKE_CURRENT_BINARY_DIR}/include/glucose/core/ProofVisitor.h COPYONLY)
+configure_file (core/TraceProofVisitor.h
+  ${CMAKE_CURRENT_BINARY_DIR}/include/glucose/core/TraceProofVisitor.h COPYONLY)
 configure_file (simp/SimpSolver.h
   ${CMAKE_CURRENT_BINARY_DIR}/include/glucose/simp/SimpSolver.h COPYONLY)
 

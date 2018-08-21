@@ -40,6 +40,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 namespace Glucose {
 
+class ProofVisitor;
+
 //=================================================================================================
 // Solver -- the main class:
 
@@ -60,7 +62,8 @@ public:
     bool    addClause (Lit p);                                  // Add a unit clause to the solver. 
     bool    addClause (Lit p, Lit q);                           // Add a binary clause to the solver. 
     bool    addClause (Lit p, Lit q, Lit r);                    // Add a ternary clause to the solver. 
-    bool    addClause_(      vec<Lit>& ps);                     // Add a clause to the solver without making superflous internal copy. Will
+    bool    addClause_(vec<Lit>& ps);
+    bool    addClause_(      vec<Lit>& ps, Range part);         // Add a clause to the solver without making superflous internal copy. Will
                                                                 // change the passed vector 'ps'.
 
     // Solving:
@@ -77,6 +80,22 @@ public:
     void    toDimacs     (FILE* f, const vec<Lit>& assumps);            // Write CNF to file in DIMACS-format.
     void    toDimacs     (const char *file, const vec<Lit>& assumps);
     void    toDimacs     (FILE* f, Clause& c, vec<Var>& map, Var& max);
+
+    // Proof validation / traversal
+    bool    validate ();  // validates clausal proof
+    void    replay (ProofVisitor& v,  vec<CRef>* pOldProof = NULL); // replays clausal proof AFTER validation
+
+    bool    proofLogging () { return log_proof;}
+    void    proofLogging (bool v) { log_proof = v;}
+    bool    orderedPropagate () { return ordered_propagate; }
+    void    orderedPropagate (bool v) { ordered_propagate = v; }
+
+    int start;
+    void labelLevel0(ProofVisitor& v);
+    void labelFinal(ProofVisitor& v, CRef confl);
+    CRef fixrec(ProofVisitor& v, CRef anchor, int part);
+    bool traverse(ProofVisitor& v, CRef proofClause, CRef reason, int part, vec<Lit>& out_learnt, Range& range);
+
     void printLit(Lit l);
     void printClause(CRef c);
     void printInitialClause(CRef c);
@@ -89,6 +108,7 @@ public:
     // Variable mode:
     // 
     void    setPolarity    (Var v, bool b); // Declare which polarity the decision heuristic should use for a variable. Requires mode 'polarity_user'.
+    void    setSelector (Var v, bool b); // Declares variable as a selector
     void    setDecisionVar (Var v, bool b); // Declare if a variable should be eligible for selection in the decision heuristic.
 
     // Read state:
@@ -105,7 +125,6 @@ public:
 
     // Incremental mode
     void setIncrementalMode();
-    void initNbInitialVars(int nb);
     void printIncrementalStats();
 
     // Resource contraints:
@@ -134,6 +153,8 @@ public:
     // Mode of operation:
     //
     int       verbosity;
+    bool      log_proof; // Enable proof logging
+    bool      ordered_propagate;
     int       verbEveryConflicts;
     int       showModel;
     // Constants For restarts
@@ -172,6 +193,28 @@ public:
     uint64_t nbRemovedClauses,nbReducedClauses,nbDL2,nbBin,nbUn,nbReduceDB,solves, starts, decisions, rnd_decisions, propagations, conflicts,conflictsRestarts,nbstopsrestarts,nbstopsrestartssame,lastblockatrestart;
     uint64_t dec_vars, clauses_literals, learnts_literals, max_literals, tot_literals;
 
+    void setCurrentPart(unsigned n)     { currentPart = n; }
+    unsigned getCurrentPart ()          { return currentPart; }
+    Range    getTotalPart ()            { return totalPart;       }
+    void     reorderProof(bool reorder) { reorder_proof = reorder;}
+    void     coreUnits(bool core)       { core_units = core;      }
+
+    Range 		 part (Var v) const   { assert(partInfo.size() > v); return partInfo[v]; }
+    Range         getVarRange(Var v) const    { assert(partInfo.size() > v); return partInfo[v]; }
+    Range         getClsRange(CRef cls) const { assert(cls != CRef_Undef); return ca[cls].part(); }
+    const Clause& getClause(CRef cr) const    {return ca[cr];}
+    CRef			 getReason(Var x) const      {return reason(x);}
+
+    /// -- a clause is shared if all of its variables appear in clauses
+    /// -- with a higher partition
+    bool shared (CRef cr)
+    {
+	Clause &c = ca[cr];
+	for (int i = 0; i < c.size (); ++i)
+            if (part (var (c[i])).max () <= c.part ().max ()) return false;
+         return true;
+    }
+
 protected:
     long curRestart;
     // Helper structures:
@@ -182,6 +225,7 @@ protected:
     struct Watcher {
         CRef cref;
         Lit  blocker;
+        Watcher () : cref(CRef_Undef), blocker(lit_Undef) {}
         Watcher(CRef cr, Lit p) : cref(cr), blocker(p) {}
         bool operator==(const Watcher& w) const { return cref == w.cref; }
         bool operator!=(const Watcher& w) const { return cref != w.cref; }
@@ -194,18 +238,58 @@ protected:
         bool operator()(const Watcher& w) const { return ca[w.cref].mark() == 1; }
     };
 
+    struct WatcherLt
+	{
+	  const ClauseAllocator& ca;
+	  WatcherLt (const ClauseAllocator& _ca) : ca(_ca) {}
+	  bool operator () (Watcher const &x, Watcher const &y)
+	  { return x.cref > y.cref; }
+	};
+
     struct VarOrderLt {
         const vec<double>&  activity;
         bool operator () (Var x, Var y) const { return activity[x] > activity[y]; }
         VarOrderLt(const vec<double>&  act) : activity(act) { }
     };
 
+    struct LitOrderLt {
+		const vec<VarData>& vardata;
+		const vec<lbool>&   assigns;
+
+	  /// -- order first by levels, then by values
+		bool operator () (Lit x, Lit y) const
+		{
+		  lbool xVal = assigns [var (x)] ^ sign (x);
+		  lbool yVal = assigns [var (y)] ^ sign (y);
+
+		  assert (xVal != l_Undef);
+		  assert (yVal != l_Undef);
+
+		  int xLvl = vardata [var(x)].level;
+		  int yLvl = vardata [var(y)].level;
+
+		  if (xLvl > yLvl) return true;
+		  if (xLvl < yLvl) return false;
+
+		  assert (xLvl == yLvl);
+		  // l_Undef < l_True < l_False
+		  if (xVal == yVal) return x < y;
+
+		  if (xVal == l_Undef) return true;
+		  if (xVal == l_True) return yVal == l_False;
+		  return false;
+		}
+		LitOrderLt(const vec<VarData>& vd, const vec<lbool>& a) :
+		  vardata(vd), assigns(a) { }
+	};
 
     // Solver state:
     //
     int lastIndexRed;
     bool                ok;               // If FALSE, the constraints are already unsatisfiable. No part of the solver state may be used!
     double              cla_inc;          // Amount to bump next clause with.
+    vec<CRef>           proof;            // Clausal proof
+    vec<Range>          trail_part;       // Partition of variables on the trail
     vec<double>         activity;         // A heuristic measurement of the activity of a variable.
     double              var_inc;          // Amount to bump next variable with.
     OccLists<Lit, vec<Watcher>, WatcherDeleted>
@@ -218,6 +302,7 @@ protected:
     vec<lbool>          assigns;          // The current assignments.
     vec<char>           polarity;         // The preferred polarity of each variable.
     vec<char>           decision;         // Declares if a variable is eligible for selection in the decision heuristic.
+    vec<char>           selector;         // Marks variable as a selector / assumption
     vec<Lit>            trail;            // Assignment stack; stores all assigments made in the order they were made.
         vec<int>            nbpos;
     vec<int>            trail_lim;        // Separator indices for different decision levels in 'trail'.
@@ -265,10 +350,17 @@ protected:
     int64_t             propagation_budget; // -1 means no budget.
     bool                asynch_interrupt;
 
+    // Interpolation related data structures
+	vec<Range> partInfo;
+	unsigned currentPart;
+	// Range that includes all partitions of clauses in the database
+	Range      totalPart;
+	bool       reorder_proof;
+	CRef       confl_assumps;
+	bool       core_units;
 
     // Variables added for incremental mode
     int incremental; // Use incremental SAT Solver
-    int nbVarsInitialFormula; // nb VAR in formula without assumptions (incremental SAT)
     double totalTime4Sat,totalTime4Unsat;
     int nbSatCalls,nbUnsatCalls;
     vec<int> assumptionPositions,initialPositions;
@@ -281,17 +373,18 @@ protected:
     void     newDecisionLevel ();                                                      // Begins a new decision level.
     void     uncheckedEnqueue (Lit p, CRef from = CRef_Undef);                         // Enqueue a literal. Assumes value of literal is undefined.
     bool     enqueue          (Lit p, CRef from = CRef_Undef);                         // Test if fact 'p' contradicts current state, enqueue otherwise.
-    CRef     propagate        ();                                                      // Perform unit propagation. Returns possibly conflicting clause.
+    CRef     propagate        (bool coreOnly = false, int maxPart = 0);                // Perform unit propagation. Returns possibly conflicting clause.
     void     cancelUntil      (int level);                                             // Backtrack until a certain level.
-    void     analyze          (CRef confl, vec<Lit>& out_learnt, vec<Lit> & selectors, int& out_btlevel,unsigned int &nblevels,unsigned int &szWithoutSelectors);    // (bt = backtrack)
-    void     analyzeFinal     (Lit p, vec<Lit>& out_conflict);                         // COULD THIS BE IMPLEMENTED BY THE ORDINARIY "analyze" BY SOME REASONABLE GENERALIZATION?
-    bool     litRedundant     (Lit p, uint32_t abstract_levels);                       // (helper method for 'analyze()')
+    void     analyze          (CRef confl, vec<Lit>& out_learnt, vec<Lit> & selectors, int& out_btlevel,unsigned int &nblevels,unsigned int &szWithoutSelectors, Range &part);    // (bt = backtrack)
+    void     analyzeFinal     (Lit p, vec<Lit>& out_conflict, Range& part);                         // COULD THIS BE IMPLEMENTED BY THE ORDINARIY "analyze" BY SOME REASONABLE GENERALIZATION?
+    bool     litRedundant     (Lit p, uint32_t abstract_levels, Range& part);                       // (helper method for 'analyze()')
     lbool    search           (int nof_conflicts);                                     // Search for a given number of conflicts.
     lbool    solve_           ();                                                      // Main solve method (assumptions given in 'assumptions').
     void     reduceDB         ();                                                      // Reduce the set of learnt clauses.
     void     removeSatisfied  (vec<CRef>& cs);                                         // Shrink 'cs' to contain only non-satisfied clauses.
     void     rebuildOrderHeap ();
 
+    bool     validateLemma (CRef c);
     // Maintaining Variable/Clause activity:
     //
     void     varDecayActivity ();                      // Decay all variables with the specified factor. Implemented by increasing the 'bump' value instead.
@@ -322,8 +415,21 @@ protected:
     int      level            (Var x) const;
     double   progressEstimate ()      const; // DELETE THIS ?? IT'S NOT VERY USEFUL ...
     bool     withinBudget     ()      const;
-    inline bool isSelector(Var v) {return (incremental && v>nbVarsInitialFormula);}
+    inline bool isSelector(Var v) {return (incremental && selector[v]);}
 
+    inline void rotateBinary(CRef cr, Lit l)
+    {
+    	Clause& c = ca[cr];
+    	if (c.size() == 2 && c[0] != l)
+		{
+    		assert(false);
+		  Lit tmp = c[1];
+		  c[1] = c[0];
+		  c[0] = tmp;
+		}
+    }
+
+    bool     clausesAreEqual(CRef orig, const vec<Lit>& lits) const;
     // Static helpers:
     //
 
@@ -378,13 +484,15 @@ inline void Solver::checkGarbage(double gf){
 // NOTE: enqueue does not set the ok flag! (only public methods do)
 inline bool     Solver::enqueue         (Lit p, CRef from)      { return value(p) != l_Undef ? value(p) != l_False : (uncheckedEnqueue(p, from), true); }
 inline bool     Solver::addClause       (const vec<Lit>& ps)    { ps.copyTo(add_tmp); return addClause_(add_tmp); }
+inline bool     Solver::addClause_      (vec<Lit>&ps)           { return addClause_ (ps, Range (currentPart)); }
 inline bool     Solver::addEmptyClause  ()                      { add_tmp.clear(); return addClause_(add_tmp); }
 inline bool     Solver::addClause       (Lit p)                 { add_tmp.clear(); add_tmp.push(p); return addClause_(add_tmp); }
 inline bool     Solver::addClause       (Lit p, Lit q)          { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); return addClause_(add_tmp); }
 inline bool     Solver::addClause       (Lit p, Lit q, Lit r)   { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); add_tmp.push(r); return addClause_(add_tmp); }
  inline bool     Solver::locked          (const Clause& c) const { 
-   if(c.size()>2) 
+   if(c.size() != 2)
      return value(c[0]) == l_True && reason(var(c[0])) != CRef_Undef && ca.lea(reason(var(c[0]))) == &c; 
+   else
    return 
      (value(c[0]) == l_True && reason(var(c[0])) != CRef_Undef && ca.lea(reason(var(c[0]))) == &c)
      || 
@@ -404,6 +512,7 @@ inline int      Solver::nLearnts      ()      const   { return learnts.size(); }
 inline int      Solver::nVars         ()      const   { return vardata.size(); }
 inline int      Solver::nFreeVars     ()      const   { return (int)dec_vars - (trail_lim.size() == 0 ? trail.size() : trail_lim[0]); }
 inline void     Solver::setPolarity   (Var v, bool b) { polarity[v] = b; }
+inline void     Solver::setSelector (Var v, bool b) { selector[v] = b; }
 inline void     Solver::setDecisionVar(Var v, bool b) 
 { 
     if      ( b && !decision[v]) dec_vars++;
