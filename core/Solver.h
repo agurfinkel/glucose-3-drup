@@ -215,6 +215,8 @@ public:
          return true;
     }
 
+    inline bool isSelector(Var v) const {return (incremental && selector[v]);}
+
 protected:
     long curRestart;
     // Helper structures:
@@ -415,7 +417,6 @@ protected:
     int      level            (Var x) const;
     double   progressEstimate ()      const; // DELETE THIS ?? IT'S NOT VERY USEFUL ...
     bool     withinBudget     ()      const;
-    inline bool isSelector(Var v) {return (incremental && selector[v]);}
 
     inline void rotateBinary(CRef cr, Lit l)
     {
