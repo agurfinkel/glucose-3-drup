@@ -108,6 +108,7 @@ lbool SimpSolver::solve_(bool do_simp, bool turn_off_simp)
             if (!frozen[v]){
                 // Freeze and store.
                 setFrozen(v, true);
+                setSelector(v,true);
                 extra_frozen.push(v);
             } }
 
@@ -125,7 +126,10 @@ lbool SimpSolver::solve_(bool do_simp, bool turn_off_simp)
     if (do_simp)
         // Unfreeze the assumptions that were frozen:
         for (int i = 0; i < extra_frozen.size(); i++)
+        {
             setFrozen(extra_frozen[i], false);
+            setSelector(extra_frozen[i], false);
+        }
 
     return result;
 }
