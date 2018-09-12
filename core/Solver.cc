@@ -484,7 +484,7 @@ void Solver::replay (ProofVisitor& v,  vec<CRef>* pOldProof)
       // -- except for locked and core clauses
       if (c.mark() == 0)
       {
-          if (c.core() && c.learnt())
+          if (c.core() /* && c.learnt() */)
           {
               // If it is core, we do not delete it.
               continue;
@@ -693,6 +693,9 @@ void Solver::replay (ProofVisitor& v,  vec<CRef>* pOldProof)
 		  ca[cr].mark(1);
 		  ca[cr].core (0);
 		  cancelUntil (0);
+
+                  // cr is a duplicate of p, updated confl_assumps
+                  if (confl_assumps == cr) confl_assumps = p;
       }
   }
 
@@ -754,8 +757,8 @@ void Solver::replay (ProofVisitor& v,  vec<CRef>* pOldProof)
               assert (c.mark() == 1);
               assert(c.core() == 0 || satisfied(c));
           }
-          else
-              assert(false);
+          // else
+          //     assert(false);
         }
 
         ca[proof[i]].core(0);
