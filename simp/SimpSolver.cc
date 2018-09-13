@@ -60,6 +60,7 @@ SimpSolver::SimpSolver() :
   , elim_heap          (ElimLt(n_occ))
   , bwdsub_assigns     (0)
   , n_touched          (0)
+  , parsing            (0) //HG : initialize here to prevent undefined behaviour when adding clauses
 {
     vec<Lit> dummy(1,lit_Undef);
     ca.extra_clause_field = true; // NOTE: must happen before allocating the dummy clause below.
