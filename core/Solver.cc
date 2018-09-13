@@ -774,6 +774,13 @@ void Solver::replay (ProofVisitor& v,  vec<CRef>* pOldProof)
             learnts[j++] = learnts[i];
     learnts.shrink(i-j);
 
+    // Remove all clauses that are deleted
+    for (i=0, j=0; i < clauses.size(); i++) {
+        if (ca[clauses[i]].mark() == 0)
+            clauses[j++] = clauses[i];
+    }
+    clauses.shrink(i-j);
+
     if (pOldProof != NULL)
         proof.moveTo(*pOldProof);
     else
