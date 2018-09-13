@@ -1257,7 +1257,7 @@ void Solver::removeClause(CRef cr) {
 
 
 bool Solver::satisfied(const Clause& c) const {
-  if(incremental)  // Check clauses with many selectors is too time consuming
+  if(incremental && !log_proof)  // Check clauses with many selectors is too time consuming
     return (value(c[0]) == l_True) || (value(c[1]) == l_True);
 
   // Default mode.
